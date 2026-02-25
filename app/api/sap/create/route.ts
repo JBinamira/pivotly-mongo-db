@@ -26,10 +26,27 @@ export async function POST(req: Request) {
     const client = new MongoClient(process.env.MONGODB_URI);
     await client.connect();
 
-    const db = client.db("pivotly");
-    const collection = db.collection("sap");
-
     const body = await req.json();
+
+    const rawCollection =
+      body.collection ?? body.table ?? body.collectionName ?? "sap";
+    const collectionName =
+      typeof rawCollection === "string" ? rawCollection.trim() : "sap";
+    const finalCollectionName = collectionName || "sap";
+
+    if (!/^\w{1,64}$/.test(finalCollectionName)) {
+      return Response.json(
+        {
+          success: false,
+          error:
+            "collection must be a non-empty string of letters, numbers, and underscores (max 64 characters)",
+        },
+        { status: 400 }
+      );
+    }
+
+    const db = client.db("pivotly");
+    const collection = db.collection(finalCollectionName);
 
     if (!body.sku) {
       throw new Error("sku is required for upsert");
@@ -56,6 +73,7 @@ export async function POST(req: Request) {
 
     return Response.json({
       success: true,
+      collection: finalCollectionName,
       upsertedId: result.upsertedId ?? null,
       matchedCount: result.matchedCount,
       modifiedCount: result.modifiedCount
